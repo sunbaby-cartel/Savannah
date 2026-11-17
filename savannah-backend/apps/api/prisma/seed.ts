@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, Prisma, CustomerStatus, OrderType, OrderStatus, ReservationStatus, ActivityType } from '../generated/prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const { Decimal } = Prisma;
 const connectionString = process.env.DATABASE_URL;
@@ -724,8 +725,31 @@ async function main() {
   });
   console.log('  7 activities');
 
-  console.log('Seed complete.');
+console.log('Seeding  users…');
+  const passwordHash = await bcrypt.hash('Password123!', 10);
+  await prisma.user.createMany({
+    data: [
+      {
+        email: 'manager@savanna.table',
+        passwordHash,
+        fullName: 'Amina Manager',
+        role: 'manager',
+      },
+      {
+        email: 'cashier@savanna.table',
+        passwordHash,
+        fullName: 'James Cashier',
+        role: 'cashier',
+      },
+    ],
+    skipDuplicates: true,
+  });
+  console.log('  2 users');
+
+
+console.log('Seed complete.');
 }
+
 
 main()
   .catch((e) => {

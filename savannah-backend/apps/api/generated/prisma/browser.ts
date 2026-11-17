@@ -47,3 +47,8 @@ export type Reservation = Prisma.ReservationModel
  * 
  */
 export type Activity = Prisma.ActivityModel
+/**
+ * Model User
+ * 
+ */
+export type User = Prisma.UserModel

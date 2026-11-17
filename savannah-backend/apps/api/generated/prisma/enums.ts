@@ -75,3 +75,12 @@ export const ActivityType = {
 } as const
 
 export type ActivityType = (typeof ActivityType)[keyof typeof ActivityType]
+
+
+export const StaffRole = {
+  cashier: 'cashier',
+  manager: 'manager',
+  admin: 'admin'
+} as const
+
+export type StaffRole = (typeof StaffRole)[keyof typeof StaffRole]
