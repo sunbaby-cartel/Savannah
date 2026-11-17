@@ -1,0 +1,200 @@
+// Savanna Table RMS — Prisma schema
+// Matches the frontend types in src/types/index.ts and the REST contract
+// documented in src/services/api.ts
+//
+// Usage (NestJS project):
+//   1. Copy this file to prisma/schema.prisma
+//   2. Set DATABASE_URL in .env
+//   3. npx prisma migrate dev --name init
+//   4. npx prisma db seed
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum MenuCategory {
+  Breakfast
+  MainCourse    @map("Main Course")
+  Grills
+  Vegetarian
+  Desserts
+  HotDrinks     @map("Hot Drinks")
+  ColdDrinks    @map("Cold Drinks")
+
+  @@map("menu_category")
+}
+
+enum CustomerStatus {
+  active
+  suspended
+  inactive
+}
+
+enum OrderType {
+  dine_in   @map("dine-in")
+  takeaway
+  delivery
+
+  @@map("order_type")
+}
+
+enum OrderStatus {
+  pending
+  preparing
+  ready
+  completed
+  cancelled
+}
+
+enum ReservationStatus {
+  confirmed
+  seated
+  completed
+  cancelled
+  no_show @map("no-show")
+
+  @@map("reservation_status")
+}
+
+enum ActivityType {
+  order_created
+  order_status
+  order_cancelled
+  menu_updated
+  customer_registered
+  reservation_created
+  reservation_updated
+  low_stock
+  sync
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model MenuItem {
+  id                      String       @id @default(cuid())
+  name                    String
+  description             String       @default("")
+  /// Stored as the display label used by the frontend (e.g. "Main Course")
+  category                String
+  price                   Decimal      @db.Decimal(10, 2)
+  availableQuantity       Int          @default(0) @map("available_quantity")
+  totalQuantity           Int          @default(0) @map("total_quantity")
+  preparationTimeMinutes  Int          @default(15) @map("preparation_time_minutes")
+  /// e.g. ["Vegetarian", "Halal", "Gluten-Free"]
+  dietaryTags             String[]     @default([]) @map("dietary_tags")
+  imageGradient           String       @default("from-amber-500 to-orange-600") @map("image_gradient")
+  isAvailable             Boolean      @default(true) @map("is_available")
+  createdAt               DateTime     @default(now()) @map("created_at")
+  updatedAt               DateTime     @updatedAt @map("updated_at")
+
+  orderItems              OrderItem[]
+
+  @@index([category])
+  @@index([isAvailable])
+  @@map("menu_items")
+}
+
+model Customer {
+  id                   String         @id @default(cuid())
+  name                 String
+  email                String         @unique
+  phone                String
+  customerNumber       String         @unique @map("customer_number")
+  status               CustomerStatus @default(active)
+  joinedDate           DateTime       @default(now()) @map("joined_date")
+  dietaryPreferences   String[]       @default([]) @map("dietary_preferences")
+  notes                String         @default("")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  orders               Order[]
+  reservations         Reservation[]
+
+  @@index([status])
+  @@map("customers")
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  orderNumber   String      @unique @map("order_number")
+  customerId    String?     @map("customer_id")
+  /// Denormalized for walk-in guests and historical display
+  customerName  String      @map("customer_name")
+  orderType     OrderType   @map("order_type")
+  tableNumber   String?     @map("table_number")
+  subtotal      Decimal     @db.Decimal(10, 2)
+  tax           Decimal     @db.Decimal(10, 2)
+  total         Decimal     @db.Decimal(10, 2)
+  status        OrderStatus @default(pending)
+  notes         String      @default("")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  completedAt   DateTime?   @map("completed_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  customer      Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items         OrderItem[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([customerId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String   @map("order_id")
+  menuItemId    String   @map("menu_item_id")
+  /// Snapshot of the name at order time
+  menuItemName  String   @map("menu_item_name")
+  quantity      Int
+  unitPrice     Decimal  @db.Decimal(10, 2) @map("unit_price")
+  lineTotal     Decimal  @db.Decimal(10, 2) @map("line_total")
+
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem      MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([menuItemId])
+  @@map("order_items")
+}
+
+model Reservation {
+  id               String            @id @default(cuid())
+  customerId       String?           @map("customer_id")
+  customerName     String            @map("customer_name")
+  /// Date only (store as date, no time component)
+  reservationDate  DateTime          @db.Date @map("reservation_date")
+  /// Local time string "HH:mm"
+  reservationTime  String            @map("reservation_time")
+  guestCount       Int               @map("guest_count")
+  tableNumber      String            @map("table_number")
+  status           ReservationStatus @default(confirmed)
+  specialRequests  String            @default("") @map("special_requests")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  customer         Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([reservationDate])
+  @@index([status])
+  @@index([customerId])
+  @@map("reservations")
+}
+
+model Activity {
+  id        String       @id @default(cuid())
+  type      ActivityType
+  message   String
+  entityId  String?      @map("entity_id")
+  timestamp DateTime     @default(now())
+
+  @@index([timestamp])
+  @@map("activities")
+}
